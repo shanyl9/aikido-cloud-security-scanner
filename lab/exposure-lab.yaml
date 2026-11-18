@@ -1,0 +1,250 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Exposure lab for the cloud security scanner PoC. One VPC, five EC2 instances that all share
+  the same security group (tcp/22 from 0.0.0.0/0). Only one of them is actually reachable from
+  the internet; each of the others is blocked by exactly one different control.
+  No key pair is attached, so nobody can log in even though port 22 is open.
+  Cost: 5 small instances + 4 public IPv4 addresses, a few cents per hour. Delete the stack when done.
+
+Parameters:
+  InstanceType:
+    Type: String
+    Default: t3.micro
+    Description: Free-tier eligible type in most regions (use t2.micro where t3.micro is not).
+  AmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+
+Resources:
+  # ---------------------------------------------------------------- network
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.20.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags: [{ Key: Name, Value: exposure-lab }]
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags: [{ Key: Name, Value: exposure-lab-igw }]
+
+  GatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref InternetGateway
+
+  # Route table with 0.0.0.0/0 -> internet gateway, explicitly associated with the "public" subnets.
+  # The VPC's main route table is left untouched: it only has the local route.
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags: [{ Key: Name, Value: exposure-lab-public }]
+
+  DefaultRouteToIgw:
+    Type: AWS::EC2::Route
+    DependsOn: GatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  # Subnet 1: public route table, default NACL (allow all).
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.20.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      Tags: [{ Key: Name, Value: lab-public }]
+  PublicSubnetRoutes:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: { SubnetId: !Ref PublicSubnet, RouteTableId: !Ref PublicRouteTable }
+
+  # Subnet 2: NO explicit route table association, so the VPC main route table applies (local only).
+  NoRouteSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.20.2.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      Tags: [{ Key: Name, Value: lab-main-rt-no-igw }]
+
+  # Subnet 3: public route table, NACL denies tcp/22 (rule 90) before allowing everything (rule 100).
+  NaclDenySubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.20.3.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      Tags: [{ Key: Name, Value: lab-nacl-deny-ssh }]
+  NaclDenySubnetRoutes:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: { SubnetId: !Ref NaclDenySubnet, RouteTableId: !Ref PublicRouteTable }
+
+  # Subnet 4: public route table, NACL allows tcp/22 in but only tcp/443 out (no reply path).
+  NaclNoEphemeralSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.20.4.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      Tags: [{ Key: Name, Value: lab-nacl-no-ephemeral }]
+  NaclNoEphemeralSubnetRoutes:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: { SubnetId: !Ref NaclNoEphemeralSubnet, RouteTableId: !Ref PublicRouteTable }
+
+  # ---------------------------------------------------------------- network ACLs
+  DenySshAcl:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId: !Ref Vpc
+      Tags: [{ Key: Name, Value: lab-deny-ssh }]
+  DenySshIn90:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref DenySshAcl
+      RuleNumber: 90
+      Protocol: 6
+      PortRange: { From: 22, To: 22 }
+      RuleAction: deny
+      Egress: false
+      CidrBlock: 0.0.0.0/0
+  DenySshIn100:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref DenySshAcl
+      RuleNumber: 100
+      Protocol: -1
+      RuleAction: allow
+      Egress: false
+      CidrBlock: 0.0.0.0/0
+  DenySshOut100:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref DenySshAcl
+      RuleNumber: 100
+      Protocol: -1
+      RuleAction: allow
+      Egress: true
+      CidrBlock: 0.0.0.0/0
+  DenySshAclAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties: { SubnetId: !Ref NaclDenySubnet, NetworkAclId: !Ref DenySshAcl }
+
+  NoEphemeralAcl:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId: !Ref Vpc
+      Tags: [{ Key: Name, Value: lab-no-ephemeral }]
+  NoEphemeralIn100:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref NoEphemeralAcl
+      RuleNumber: 100
+      Protocol: 6
+      PortRange: { From: 22, To: 22 }
+      RuleAction: allow
+      Egress: false
+      CidrBlock: 0.0.0.0/0
+  NoEphemeralOut100:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref NoEphemeralAcl
+      RuleNumber: 100
+      Protocol: 6
+      PortRange: { From: 443, To: 443 }
+      RuleAction: allow
+      Egress: true
+      CidrBlock: 0.0.0.0/0
+  NoEphemeralAclAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties: { SubnetId: !Ref NaclNoEphemeralSubnet, NetworkAclId: !Ref NoEphemeralAcl }
+
+  # ---------------------------------------------------------------- security groups
+  OpenSshGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: lab-open-ssh
+      GroupDescription: SSH open to the world (shared by every lab instance)
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 22, ToPort: 22, CidrIp: 0.0.0.0/0, Description: ssh from anywhere }
+      Tags: [{ Key: Name, Value: lab-open-ssh }]
+
+  # Open to everything but attached to nothing: must not produce a finding.
+  OrphanOpenGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: lab-orphan-all-open
+      GroupDescription: All traffic from anywhere, attached to nothing
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - { IpProtocol: "-1", CidrIp: 0.0.0.0/0 }
+      Tags: [{ Key: Name, Value: lab-orphan-all-open }]
+
+  # ---------------------------------------------------------------- instances
+  # Expected: EXPOSED. Public IP, IGW route, default NACL.
+  ExposedInstance:
+    Type: AWS::EC2::Instance
+    DependsOn: DefaultRouteToIgw
+    Properties:
+      ImageId: !Ref AmiId
+      InstanceType: !Ref InstanceType
+      NetworkInterfaces:
+        - { DeviceIndex: "0", SubnetId: !Ref PublicSubnet, AssociatePublicIpAddress: true, GroupSet: [!Ref OpenSshGroup] }
+      Tags: [{ Key: Name, Value: lab-exposed }, { Key: expected, Value: EXPOSED }]
+
+  # Expected: NOT_EXPOSED (public-ip). Same subnet as the exposed one, no public IP.
+  NoPublicIpInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AmiId
+      InstanceType: !Ref InstanceType
+      NetworkInterfaces:
+        - { DeviceIndex: "0", SubnetId: !Ref PublicSubnet, AssociatePublicIpAddress: false, GroupSet: [!Ref OpenSshGroup] }
+      Tags: [{ Key: Name, Value: lab-no-public-ip }, { Key: expected, Value: NOT_EXPOSED public-ip }]
+
+  # Expected: NOT_EXPOSED (route-table). Has a public IP, but its subnet uses the main route table (local only).
+  NoRouteInstance:
+    Type: AWS::EC2::Instance
+    DependsOn: GatewayAttachment
+    Properties:
+      ImageId: !Ref AmiId
+      InstanceType: !Ref InstanceType
+      NetworkInterfaces:
+        - { DeviceIndex: "0", SubnetId: !Ref NoRouteSubnet, AssociatePublicIpAddress: true, GroupSet: [!Ref OpenSshGroup] }
+      Tags: [{ Key: Name, Value: lab-main-rt-no-igw }, { Key: expected, Value: NOT_EXPOSED route-table }]
+
+  # Expected: NOT_EXPOSED (nacl-inbound).
+  NaclDenyInstance:
+    Type: AWS::EC2::Instance
+    DependsOn: [DefaultRouteToIgw, DenySshAclAssociation]
+    Properties:
+      ImageId: !Ref AmiId
+      InstanceType: !Ref InstanceType
+      NetworkInterfaces:
+        - { DeviceIndex: "0", SubnetId: !Ref NaclDenySubnet, AssociatePublicIpAddress: true, GroupSet: [!Ref OpenSshGroup] }
+      Tags: [{ Key: Name, Value: lab-nacl-deny }, { Key: expected, Value: NOT_EXPOSED nacl-inbound }]
+
+  # Expected: NOT_EXPOSED (nacl-outbound).
+  NaclNoEphemeralInstance:
+    Type: AWS::EC2::Instance
+    DependsOn: [DefaultRouteToIgw, NoEphemeralAclAssociation]
+    Properties:
+      ImageId: !Ref AmiId
+      InstanceType: !Ref InstanceType
+      NetworkInterfaces:
+        - { DeviceIndex: "0", SubnetId: !Ref NaclNoEphemeralSubnet, AssociatePublicIpAddress: true, GroupSet: [!Ref OpenSshGroup] }
+      Tags: [{ Key: Name, Value: lab-nacl-no-ephemeral }, { Key: expected, Value: NOT_EXPOSED nacl-outbound }]
+
+Outputs:
+  VpcId:
+    Value: !Ref Vpc
+  ExposedInstance:
+    Value: !Ref ExposedInstance
+  ExposedPublicIp:
+    Value: !GetAtt ExposedInstance.PublicIp
