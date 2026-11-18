@@ -1,0 +1,623 @@
+{
+  "Reservations": [
+    {
+      "Groups": [],
+      "Instances": [
+        {
+          "AmiLaunchIndex": 0,
+          "ImageId": "ami-0abcdef1234567890",
+          "InstanceId": "i-0exposed000000001",
+          "InstanceType": "t3.micro",
+          "LaunchTime": "2026-11-01T09:00:00+00:00",
+          "Placement": {
+            "AvailabilityZone": "eu-west-1a",
+            "Tenancy": "default"
+          },
+          "PrivateDnsName": "ip-10-0-1-10.eu-west-1.compute.internal",
+          "PrivateIpAddress": "10.0.1.10",
+          "PublicDnsName": "",
+          "State": {
+            "Code": 16,
+            "Name": "running"
+          },
+          "SubnetId": "subnet-0public000000001",
+          "VpcId": "vpc-0a1b2c3d4e5f60001",
+          "Architecture": "x86_64",
+          "NetworkInterfaces": [
+            {
+              "Attachment": {
+                "AttachTime": "2026-11-01T09:00:00+00:00",
+                "AttachmentId": "eni-attach-0exposed000000001",
+                "DeleteOnTermination": true,
+                "DeviceIndex": 0,
+                "Status": "attached",
+                "NetworkCardIndex": 0
+              },
+              "Description": "",
+              "Groups": [
+                {
+                  "GroupId": "sg-0open0ssh000000001",
+                  "GroupName": "open-ssh"
+                }
+              ],
+              "Ipv6Addresses": [],
+              "MacAddress": "0a:00:00:00:00:01",
+              "NetworkInterfaceId": "eni-0exposed000000001",
+              "OwnerId": "111122223333",
+              "PrivateIpAddress": "10.0.1.10",
+              "PrivateIpAddresses": [
+                {
+                  "Primary": true,
+                  "PrivateIpAddress": "10.0.1.10",
+                  "Association": {
+                    "IpOwnerId": "amazon",
+                    "PublicDnsName": "",
+                    "PublicIp": "203.0.113.10"
+                  }
+                }
+              ],
+              "SourceDestCheck": true,
+              "Status": "in-use",
+              "SubnetId": "subnet-0public000000001",
+              "VpcId": "vpc-0a1b2c3d4e5f60001",
+              "InterfaceType": "interface",
+              "Association": {
+                "IpOwnerId": "amazon",
+                "PublicDnsName": "",
+                "PublicIp": "203.0.113.10"
+              }
+            }
+          ],
+          "SecurityGroups": [
+            {
+              "GroupId": "sg-0open0ssh000000001",
+              "GroupName": "open-ssh"
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "exposed"
+            },
+            {
+              "Key": "fixture-case",
+              "Value": "EXPOSED baseline"
+            }
+          ],
+          "PublicIpAddress": "203.0.113.10"
+        }
+      ],
+      "OwnerId": "111122223333",
+      "ReservationId": "r-0exposed000000001"
+    },
+    {
+      "Groups": [],
+      "Instances": [
+        {
+          "AmiLaunchIndex": 0,
+          "ImageId": "ami-0abcdef1234567890",
+          "InstanceId": "i-0nopublicip000001",
+          "InstanceType": "t3.micro",
+          "LaunchTime": "2026-11-01T09:00:00+00:00",
+          "Placement": {
+            "AvailabilityZone": "eu-west-1a",
+            "Tenancy": "default"
+          },
+          "PrivateDnsName": "ip-10-0-1-11.eu-west-1.compute.internal",
+          "PrivateIpAddress": "10.0.1.11",
+          "PublicDnsName": "",
+          "State": {
+            "Code": 16,
+            "Name": "running"
+          },
+          "SubnetId": "subnet-0public000000001",
+          "VpcId": "vpc-0a1b2c3d4e5f60001",
+          "Architecture": "x86_64",
+          "NetworkInterfaces": [
+            {
+              "Attachment": {
+                "AttachTime": "2026-11-01T09:00:00+00:00",
+                "AttachmentId": "eni-attach-0nopublicip000001",
+                "DeleteOnTermination": true,
+                "DeviceIndex": 0,
+                "Status": "attached",
+                "NetworkCardIndex": 0
+              },
+              "Description": "",
+              "Groups": [
+                {
+                  "GroupId": "sg-0open0ssh000000001",
+                  "GroupName": "open-ssh"
+                }
+              ],
+              "Ipv6Addresses": [],
+              "MacAddress": "0a:00:00:00:00:01",
+              "NetworkInterfaceId": "eni-0nopublicip000001",
+              "OwnerId": "111122223333",
+              "PrivateIpAddress": "10.0.1.11",
+              "PrivateIpAddresses": [
+                {
+                  "Primary": true,
+                  "PrivateIpAddress": "10.0.1.11"
+                }
+              ],
+              "SourceDestCheck": true,
+              "Status": "in-use",
+              "SubnetId": "subnet-0public000000001",
+              "VpcId": "vpc-0a1b2c3d4e5f60001",
+              "InterfaceType": "interface"
+            }
+          ],
+          "SecurityGroups": [
+            {
+              "GroupId": "sg-0open0ssh000000001",
+              "GroupName": "open-ssh"
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "no-public-ip"
+            },
+            {
+              "Key": "fixture-case",
+              "Value": "no public IP"
+            }
+          ]
+        }
+      ],
+      "OwnerId": "111122223333",
+      "ReservationId": "r-0nopublicip000001"
+    },
+    {
+      "Groups": [],
+      "Instances": [
+        {
+          "AmiLaunchIndex": 0,
+          "ImageId": "ami-0abcdef1234567890",
+          "InstanceId": "i-0natsubnet0000001",
+          "InstanceType": "t3.micro",
+          "LaunchTime": "2026-11-01T09:00:00+00:00",
+          "Placement": {
+            "AvailabilityZone": "eu-west-1a",
+            "Tenancy": "default"
+          },
+          "PrivateDnsName": "ip-10-0-2-10.eu-west-1.compute.internal",
+          "PrivateIpAddress": "10.0.2.10",
+          "PublicDnsName": "",
+          "State": {
+            "Code": 16,
+            "Name": "running"
+          },
+          "SubnetId": "subnet-0private00000001",
+          "VpcId": "vpc-0a1b2c3d4e5f60001",
+          "Architecture": "x86_64",
+          "NetworkInterfaces": [
+            {
+              "Attachment": {
+                "AttachTime": "2026-11-01T09:00:00+00:00",
+                "AttachmentId": "eni-attach-0natsubnet0000001",
+                "DeleteOnTermination": true,
+                "DeviceIndex": 0,
+                "Status": "attached",
+                "NetworkCardIndex": 0
+              },
+              "Description": "",
+              "Groups": [
+                {
+                  "GroupId": "sg-0open0ssh000000001",
+                  "GroupName": "open-ssh"
+                }
+              ],
+              "Ipv6Addresses": [],
+              "MacAddress": "0a:00:00:00:00:01",
+              "NetworkInterfaceId": "eni-0natsubnet0000001",
+              "OwnerId": "111122223333",
+              "PrivateIpAddress": "10.0.2.10",
+              "PrivateIpAddresses": [
+                {
+                  "Primary": true,
+                  "PrivateIpAddress": "10.0.2.10",
+                  "Association": {
+                    "IpOwnerId": "111122223333",
+                    "PublicDnsName": "",
+                    "PublicIp": "203.0.113.20"
+                  }
+                }
+              ],
+              "SourceDestCheck": true,
+              "Status": "in-use",
+              "SubnetId": "subnet-0private00000001",
+              "VpcId": "vpc-0a1b2c3d4e5f60001",
+              "InterfaceType": "interface",
+              "Association": {
+                "IpOwnerId": "111122223333",
+                "PublicDnsName": "",
+                "PublicIp": "203.0.113.20"
+              }
+            }
+          ],
+          "SecurityGroups": [
+            {
+              "GroupId": "sg-0open0ssh000000001",
+              "GroupName": "open-ssh"
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "nat-subnet"
+            },
+            {
+              "Key": "fixture-case",
+              "Value": "EIP but subnet routes 0.0.0.0/0 to NAT"
+            }
+          ],
+          "PublicIpAddress": "203.0.113.20"
+        }
+      ],
+      "OwnerId": "111122223333",
+      "ReservationId": "r-0natsubnet0000001"
+    },
+    {
+      "Groups": [],
+      "Instances": [
+        {
+          "AmiLaunchIndex": 0,
+          "ImageId": "ami-0abcdef1234567890",
+          "InstanceId": "i-0mainrt0000000001",
+          "InstanceType": "t3.micro",
+          "LaunchTime": "2026-11-01T09:00:00+00:00",
+          "Placement": {
+            "AvailabilityZone": "eu-west-1a",
+            "Tenancy": "default"
+          },
+          "PrivateDnsName": "ip-10-0-3-10.eu-west-1.compute.internal",
+          "PrivateIpAddress": "10.0.3.10",
+          "PublicDnsName": "",
+          "State": {
+            "Code": 16,
+            "Name": "running"
+          },
+          "SubnetId": "subnet-0mainrt000000001",
+          "VpcId": "vpc-0a1b2c3d4e5f60001",
+          "Architecture": "x86_64",
+          "NetworkInterfaces": [
+            {
+              "Attachment": {
+                "AttachTime": "2026-11-01T09:00:00+00:00",
+                "AttachmentId": "eni-attach-0mainrt0000000001",
+                "DeleteOnTermination": true,
+                "DeviceIndex": 0,
+                "Status": "attached",
+                "NetworkCardIndex": 0
+              },
+              "Description": "",
+              "Groups": [
+                {
+                  "GroupId": "sg-0open0ssh000000001",
+                  "GroupName": "open-ssh"
+                }
+              ],
+              "Ipv6Addresses": [],
+              "MacAddress": "0a:00:00:00:00:01",
+              "NetworkInterfaceId": "eni-0mainrt0000000001",
+              "OwnerId": "111122223333",
+              "PrivateIpAddress": "10.0.3.10",
+              "PrivateIpAddresses": [
+                {
+                  "Primary": true,
+                  "PrivateIpAddress": "10.0.3.10",
+                  "Association": {
+                    "IpOwnerId": "amazon",
+                    "PublicDnsName": "",
+                    "PublicIp": "203.0.113.30"
+                  }
+                }
+              ],
+              "SourceDestCheck": true,
+              "Status": "in-use",
+              "SubnetId": "subnet-0mainrt000000001",
+              "VpcId": "vpc-0a1b2c3d4e5f60001",
+              "InterfaceType": "interface",
+              "Association": {
+                "IpOwnerId": "amazon",
+                "PublicDnsName": "",
+                "PublicIp": "203.0.113.30"
+              }
+            }
+          ],
+          "SecurityGroups": [
+            {
+              "GroupId": "sg-0open0ssh000000001",
+              "GroupName": "open-ssh"
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "main-rt"
+            },
+            {
+              "Key": "fixture-case",
+              "Value": "no explicit rtb association; main rtb routes to IGW"
+            }
+          ],
+          "PublicIpAddress": "203.0.113.30"
+        }
+      ],
+      "OwnerId": "111122223333",
+      "ReservationId": "r-0mainrt0000000001"
+    },
+    {
+      "Groups": [],
+      "Instances": [
+        {
+          "AmiLaunchIndex": 0,
+          "ImageId": "ami-0abcdef1234567890",
+          "InstanceId": "i-0nacldeny00000001",
+          "InstanceType": "t3.micro",
+          "LaunchTime": "2026-11-01T09:00:00+00:00",
+          "Placement": {
+            "AvailabilityZone": "eu-west-1a",
+            "Tenancy": "default"
+          },
+          "PrivateDnsName": "ip-10-0-4-10.eu-west-1.compute.internal",
+          "PrivateIpAddress": "10.0.4.10",
+          "PublicDnsName": "",
+          "State": {
+            "Code": 16,
+            "Name": "running"
+          },
+          "SubnetId": "subnet-0nacldeny0000001",
+          "VpcId": "vpc-0a1b2c3d4e5f60001",
+          "Architecture": "x86_64",
+          "NetworkInterfaces": [
+            {
+              "Attachment": {
+                "AttachTime": "2026-11-01T09:00:00+00:00",
+                "AttachmentId": "eni-attach-0nacldeny00000001",
+                "DeleteOnTermination": true,
+                "DeviceIndex": 0,
+                "Status": "attached",
+                "NetworkCardIndex": 0
+              },
+              "Description": "",
+              "Groups": [
+                {
+                  "GroupId": "sg-0open0ssh000000001",
+                  "GroupName": "open-ssh"
+                }
+              ],
+              "Ipv6Addresses": [],
+              "MacAddress": "0a:00:00:00:00:01",
+              "NetworkInterfaceId": "eni-0nacldeny00000001",
+              "OwnerId": "111122223333",
+              "PrivateIpAddress": "10.0.4.10",
+              "PrivateIpAddresses": [
+                {
+                  "Primary": true,
+                  "PrivateIpAddress": "10.0.4.10",
+                  "Association": {
+                    "IpOwnerId": "amazon",
+                    "PublicDnsName": "",
+                    "PublicIp": "203.0.113.40"
+                  }
+                }
+              ],
+              "SourceDestCheck": true,
+              "Status": "in-use",
+              "SubnetId": "subnet-0nacldeny0000001",
+              "VpcId": "vpc-0a1b2c3d4e5f60001",
+              "InterfaceType": "interface",
+              "Association": {
+                "IpOwnerId": "amazon",
+                "PublicDnsName": "",
+                "PublicIp": "203.0.113.40"
+              }
+            }
+          ],
+          "SecurityGroups": [
+            {
+              "GroupId": "sg-0open0ssh000000001",
+              "GroupName": "open-ssh"
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "nacl-deny"
+            },
+            {
+              "Key": "fixture-case",
+              "Value": "NACL denies tcp/22 before allow-all"
+            }
+          ],
+          "PublicIpAddress": "203.0.113.40"
+        }
+      ],
+      "OwnerId": "111122223333",
+      "ReservationId": "r-0nacldeny00000001"
+    },
+    {
+      "Groups": [],
+      "Instances": [
+        {
+          "AmiLaunchIndex": 0,
+          "ImageId": "ami-0abcdef1234567890",
+          "InstanceId": "i-0naclnoeph0000001",
+          "InstanceType": "t3.micro",
+          "LaunchTime": "2026-11-01T09:00:00+00:00",
+          "Placement": {
+            "AvailabilityZone": "eu-west-1a",
+            "Tenancy": "default"
+          },
+          "PrivateDnsName": "ip-10-0-5-10.eu-west-1.compute.internal",
+          "PrivateIpAddress": "10.0.5.10",
+          "PublicDnsName": "",
+          "State": {
+            "Code": 16,
+            "Name": "running"
+          },
+          "SubnetId": "subnet-0naclnoeph000001",
+          "VpcId": "vpc-0a1b2c3d4e5f60001",
+          "Architecture": "x86_64",
+          "NetworkInterfaces": [
+            {
+              "Attachment": {
+                "AttachTime": "2026-11-01T09:00:00+00:00",
+                "AttachmentId": "eni-attach-0naclnoeph0000001",
+                "DeleteOnTermination": true,
+                "DeviceIndex": 0,
+                "Status": "attached",
+                "NetworkCardIndex": 0
+              },
+              "Description": "",
+              "Groups": [
+                {
+                  "GroupId": "sg-0open0ssh000000001",
+                  "GroupName": "open-ssh"
+                }
+              ],
+              "Ipv6Addresses": [],
+              "MacAddress": "0a:00:00:00:00:01",
+              "NetworkInterfaceId": "eni-0naclnoeph0000001",
+              "OwnerId": "111122223333",
+              "PrivateIpAddress": "10.0.5.10",
+              "PrivateIpAddresses": [
+                {
+                  "Primary": true,
+                  "PrivateIpAddress": "10.0.5.10",
+                  "Association": {
+                    "IpOwnerId": "amazon",
+                    "PublicDnsName": "",
+                    "PublicIp": "203.0.113.50"
+                  }
+                }
+              ],
+              "SourceDestCheck": true,
+              "Status": "in-use",
+              "SubnetId": "subnet-0naclnoeph000001",
+              "VpcId": "vpc-0a1b2c3d4e5f60001",
+              "InterfaceType": "interface",
+              "Association": {
+                "IpOwnerId": "amazon",
+                "PublicDnsName": "",
+                "PublicIp": "203.0.113.50"
+              }
+            }
+          ],
+          "SecurityGroups": [
+            {
+              "GroupId": "sg-0open0ssh000000001",
+              "GroupName": "open-ssh"
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "nacl-no-ephemeral"
+            },
+            {
+              "Key": "fixture-case",
+              "Value": "NACL allows 22 in, but egress only 443"
+            }
+          ],
+          "PublicIpAddress": "203.0.113.50"
+        }
+      ],
+      "OwnerId": "111122223333",
+      "ReservationId": "r-0naclnoeph0000001"
+    },
+    {
+      "Groups": [],
+      "Instances": [
+        {
+          "AmiLaunchIndex": 0,
+          "ImageId": "ami-0abcdef1234567890",
+          "InstanceId": "i-0stopped000000001",
+          "InstanceType": "t3.micro",
+          "LaunchTime": "2026-11-01T09:00:00+00:00",
+          "Placement": {
+            "AvailabilityZone": "eu-west-1a",
+            "Tenancy": "default"
+          },
+          "PrivateDnsName": "ip-10-0-1-12.eu-west-1.compute.internal",
+          "PrivateIpAddress": "10.0.1.12",
+          "PublicDnsName": "",
+          "State": {
+            "Code": 80,
+            "Name": "stopped"
+          },
+          "SubnetId": "subnet-0public000000001",
+          "VpcId": "vpc-0a1b2c3d4e5f60001",
+          "Architecture": "x86_64",
+          "NetworkInterfaces": [
+            {
+              "Attachment": {
+                "AttachTime": "2026-11-01T09:00:00+00:00",
+                "AttachmentId": "eni-attach-0stopped000000001",
+                "DeleteOnTermination": true,
+                "DeviceIndex": 0,
+                "Status": "attached",
+                "NetworkCardIndex": 0
+              },
+              "Description": "",
+              "Groups": [
+                {
+                  "GroupId": "sg-0open0ssh000000001",
+                  "GroupName": "open-ssh"
+                }
+              ],
+              "Ipv6Addresses": [],
+              "MacAddress": "0a:00:00:00:00:01",
+              "NetworkInterfaceId": "eni-0stopped000000001",
+              "OwnerId": "111122223333",
+              "PrivateIpAddress": "10.0.1.12",
+              "PrivateIpAddresses": [
+                {
+                  "Primary": true,
+                  "PrivateIpAddress": "10.0.1.12",
+                  "Association": {
+                    "IpOwnerId": "111122223333",
+                    "PublicDnsName": "",
+                    "PublicIp": "203.0.113.60"
+                  }
+                }
+              ],
+              "SourceDestCheck": true,
+              "Status": "in-use",
+              "SubnetId": "subnet-0public000000001",
+              "VpcId": "vpc-0a1b2c3d4e5f60001",
+              "InterfaceType": "interface",
+              "Association": {
+                "IpOwnerId": "111122223333",
+                "PublicDnsName": "",
+                "PublicIp": "203.0.113.60"
+              }
+            }
+          ],
+          "SecurityGroups": [
+            {
+              "GroupId": "sg-0open0ssh000000001",
+              "GroupName": "open-ssh"
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "stopped"
+            },
+            {
+              "Key": "fixture-case",
+              "Value": "stopped, keeps EIP"
+            }
+          ],
+          "PublicIpAddress": "203.0.113.60"
+        }
+      ],
+      "OwnerId": "111122223333",
+      "ReservationId": "r-0stopped000000001"
+    }
+  ]
+}

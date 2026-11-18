@@ -1,0 +1,180 @@
+{
+  "NetworkAcls": [
+    {
+      "Associations": [
+        {
+          "NetworkAclAssociationId": "aclassoc-0default000000010",
+          "NetworkAclId": "acl-0default00000001",
+          "SubnetId": "subnet-0public000000001"
+        },
+        {
+          "NetworkAclAssociationId": "aclassoc-0default000000011",
+          "NetworkAclId": "acl-0default00000001",
+          "SubnetId": "subnet-0private00000001"
+        },
+        {
+          "NetworkAclAssociationId": "aclassoc-0default000000012",
+          "NetworkAclId": "acl-0default00000001",
+          "SubnetId": "subnet-0mainrt000000001"
+        }
+      ],
+      "Entries": [
+        {
+          "CidrBlock": "0.0.0.0/0",
+          "Egress": false,
+          "Protocol": "-1",
+          "RuleAction": "allow",
+          "RuleNumber": 100
+        },
+        {
+          "CidrBlock": "0.0.0.0/0",
+          "Egress": true,
+          "Protocol": "-1",
+          "RuleAction": "allow",
+          "RuleNumber": 100
+        },
+        {
+          "CidrBlock": "0.0.0.0/0",
+          "Egress": false,
+          "Protocol": "-1",
+          "RuleAction": "deny",
+          "RuleNumber": 32767
+        },
+        {
+          "CidrBlock": "0.0.0.0/0",
+          "Egress": true,
+          "Protocol": "-1",
+          "RuleAction": "deny",
+          "RuleNumber": 32767
+        }
+      ],
+      "IsDefault": true,
+      "NetworkAclId": "acl-0default00000001",
+      "Tags": [
+        {
+          "Key": "Name",
+          "Value": "default-open"
+        }
+      ],
+      "VpcId": "vpc-0a1b2c3d4e5f60001",
+      "OwnerId": "111122223333"
+    },
+    {
+      "Associations": [
+        {
+          "NetworkAclAssociationId": "aclassoc-0denyssh00000010",
+          "NetworkAclId": "acl-0denyssh0000001",
+          "SubnetId": "subnet-0nacldeny0000001"
+        }
+      ],
+      "Entries": [
+        {
+          "CidrBlock": "0.0.0.0/0",
+          "Egress": false,
+          "Protocol": "6",
+          "RuleAction": "deny",
+          "RuleNumber": 90,
+          "PortRange": {
+            "From": 22,
+            "To": 22
+          }
+        },
+        {
+          "CidrBlock": "0.0.0.0/0",
+          "Egress": false,
+          "Protocol": "-1",
+          "RuleAction": "allow",
+          "RuleNumber": 100
+        },
+        {
+          "CidrBlock": "0.0.0.0/0",
+          "Egress": true,
+          "Protocol": "-1",
+          "RuleAction": "allow",
+          "RuleNumber": 100
+        },
+        {
+          "CidrBlock": "0.0.0.0/0",
+          "Egress": false,
+          "Protocol": "-1",
+          "RuleAction": "deny",
+          "RuleNumber": 32767
+        },
+        {
+          "CidrBlock": "0.0.0.0/0",
+          "Egress": true,
+          "Protocol": "-1",
+          "RuleAction": "deny",
+          "RuleNumber": 32767
+        }
+      ],
+      "IsDefault": false,
+      "NetworkAclId": "acl-0denyssh0000001",
+      "Tags": [
+        {
+          "Key": "Name",
+          "Value": "deny-ssh"
+        }
+      ],
+      "VpcId": "vpc-0a1b2c3d4e5f60001",
+      "OwnerId": "111122223333"
+    },
+    {
+      "Associations": [
+        {
+          "NetworkAclAssociationId": "aclassoc-0noephemeral0010",
+          "NetworkAclId": "acl-0noephemeral001",
+          "SubnetId": "subnet-0naclnoeph000001"
+        }
+      ],
+      "Entries": [
+        {
+          "CidrBlock": "0.0.0.0/0",
+          "Egress": false,
+          "Protocol": "6",
+          "RuleAction": "allow",
+          "RuleNumber": 100,
+          "PortRange": {
+            "From": 22,
+            "To": 22
+          }
+        },
+        {
+          "CidrBlock": "0.0.0.0/0",
+          "Egress": true,
+          "Protocol": "6",
+          "RuleAction": "allow",
+          "RuleNumber": 100,
+          "PortRange": {
+            "From": 443,
+            "To": 443
+          }
+        },
+        {
+          "CidrBlock": "0.0.0.0/0",
+          "Egress": false,
+          "Protocol": "-1",
+          "RuleAction": "deny",
+          "RuleNumber": 32767
+        },
+        {
+          "CidrBlock": "0.0.0.0/0",
+          "Egress": true,
+          "Protocol": "-1",
+          "RuleAction": "deny",
+          "RuleNumber": 32767
+        }
+      ],
+      "IsDefault": false,
+      "NetworkAclId": "acl-0noephemeral001",
+      "Tags": [
+        {
+          "Key": "Name",
+          "Value": "no-ephemeral"
+        }
+      ],
+      "VpcId": "vpc-0a1b2c3d4e5f60001",
+      "OwnerId": "111122223333"
+    }
+  ]
+}

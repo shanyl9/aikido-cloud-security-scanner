@@ -1,0 +1,10 @@
+{
+  "Errors": [
+    {
+      "Operation": "DescribeNetworkAcls",
+      "Action": "ec2:DescribeNetworkAcls",
+      "Code": "UnauthorizedOperation",
+      "Message": "You are not authorized to perform this operation. User: arn:aws:sts::111122223333:assumed-role/ScannerReadOnly/scan is not authorized to perform: ec2:DescribeNetworkAcls"
+    }
+  ]
+}
