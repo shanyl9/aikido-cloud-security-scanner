@@ -27,7 +27,7 @@ const (
 
 // Step is the evidence for one layer.
 type Step struct {
-	Layer    string `json:"layer"`
+	Layer    string `json:"gate"`
 	Result   Result `json:"result"`
 	Resource string `json:"resource"`
 	Detail   string `json:"detail"`

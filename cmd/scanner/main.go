@@ -106,11 +106,18 @@ func printText(w io.Writer, dir string, rep exposure.Report) {
 		}
 		fmt.Fprintln(w)
 	}
-	fmt.Fprintf(w, "Summary: %d exposed, %d unknown, %d not exposed (of %d candidates with an internet-open security group)\n",
-		counts[exposure.Exposed], counts[exposure.Unknown], counts[exposure.NotExposed], len(rep.Findings))
+	fmt.Fprintf(w, "Summary: %d exposed, %d unknown, %d not exposed (of %d %s)\n",
+		counts[exposure.Exposed], counts[exposure.Unknown], counts[exposure.NotExposed], len(rep.Findings), plural(len(rep.Findings), "candidate", "candidates"))
 }
 
 func fail(err error) {
 	fmt.Fprintln(os.Stderr, "error:", err)
 	os.Exit(1)
+}
+
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
 }

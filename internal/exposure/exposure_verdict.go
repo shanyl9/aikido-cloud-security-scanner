@@ -68,7 +68,7 @@ func rank(s Status) int {
 	return map[Status]int{Exposed: 0, Unknown: 1, NotExposed: 2}[s]
 }
 
-// evaluateInstance walks every layer and keeps all evidence, even after a layer
+// evaluateInstance walks every gate and keeps all evidence, even after a gate
 // blocks, so the output shows the full picture. ok=false means no attached
 // security group opens the port, so the instance is not a candidate.
 func evaluateInstance(s *snapshot.Snapshot, inst types.Instance, port Port) (Finding, bool) {
@@ -109,18 +109,18 @@ func evaluateInstance(s *snapshot.Snapshot, inst types.Instance, port Port) (Fin
 		f.Status, f.Severity = NotExposed, "NONE"
 		f.Summary = fmt.Sprintf("Security group is open to the internet on tcp/%d, but traffic is blocked at %s: %s", port.Number, blocking[0].Layer, blocking[0].Detail)
 		if len(blocking) > 1 {
-			f.Summary += fmt.Sprintf(" (and %d more layer(s))", len(blocking)-1)
+			f.Summary += fmt.Sprintf(" (and %d more gate(s))", len(blocking)-1)
 		}
 	case unknown:
 		f.Status, f.Severity = Unknown, "UNVERIFIED"
-		f.Summary = fmt.Sprintf("No layer was seen blocking tcp/%d, but some layers could not be evaluated. Treat as potentially exposed until verified.", port.Number)
+		f.Summary = fmt.Sprintf("No gate was seen blocking tcp/%d, but some gates could not be evaluated. Treat as potentially exposed until verified.", port.Number)
 		f.Remediation = []string{"Grant the scanner role the missing read-only permission(s) listed in the evidence, then rescan."}
 		if sg != nil {
 			f.Remediation = append(f.Remediation, sgRemediation(sg, perm, cidr, port)...)
 		}
 	default:
 		f.Status, f.Severity = Exposed, "HIGH"
-		f.Summary = fmt.Sprintf("%s (tcp/%d) is reachable from any internet address: every layer on the path allows it.", port.Service, port.Number)
+		f.Summary = fmt.Sprintf("%s (tcp/%d) is reachable from any internet address: every gate on the path allows it.", port.Service, port.Number)
 		f.Remediation = append(sgRemediation(sg, perm, cidr, port),
 			"Prefer AWS Systems Manager Session Manager or an EC2 Instance Connect Endpoint over a public "+port.Service+" port.",
 			"If the instance does not need to be public, remove its public IP / Elastic IP or move it to a private subnet.")
@@ -136,8 +136,8 @@ func sgRemediation(sg *types.SecurityGroup, perm types.IpPermission, cidr string
 	if aws.ToString(perm.IpProtocol) == "-1" {
 		return []string{fmt.Sprintf("Remove the all-traffic rule from %s and allow tcp/%d only from known ranges: aws ec2 revoke-security-group-ingress --group-id %s --ip-permissions 'IpProtocol=-1,IpRanges=[{CidrIp=%s}]'", id, port.Number, id, cidr)}
 	}
-	return []string{fmt.Sprintf("Restrict %s to known source ranges: aws ec2 revoke-security-group-ingress --group-id %s --protocol tcp --port %d-%d --cidr %s",
-		id, id, aws.ToInt32(perm.FromPort), aws.ToInt32(perm.ToPort), cidr)}
+	return []string{fmt.Sprintf("Revoke the world-open rule on %s (this affects every instance using the group), then allow tcp/%d only from known ranges: aws ec2 revoke-security-group-ingress --group-id %s --protocol tcp --port %d-%d --cidr %s",
+		id, port.Number, id, aws.ToInt32(perm.FromPort), aws.ToInt32(perm.ToPort), cidr)}
 }
 
 func nameTag(inst types.Instance) string {
