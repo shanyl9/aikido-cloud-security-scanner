@@ -63,44 +63,25 @@ when Object Ownership is `BucketOwnerEnforced`.
 | 6 | NACL outbound | NACLs are stateless: replies to the client's ephemeral ports (1024–65535) must be allowed. A partial range counts as open and is reported with the number of allowed ports | `ec2:DescribeNetworkAcls` |
 
 **Verdict.**
-- Only instances where gate 2 is open become candidates, so instances with closed SGs produce no noise. (If the SG data itself is missing, every instance is a candidate and is UNKNOWN unless another gate blocks.)
-- Every gate is evaluated and kept as evidence, even after one blocks, so the reader sees the whole picture.
-- Any gate seen **BLOCKED** gives **NOT_EXPOSED**. A known block is enough, even if another gate's data is missing.
-- No block, but a gate could not be evaluated, gives **UNKNOWN** (severity `UNVERIFIED`), naming the missing permission.
-- All gates open gives **EXPOSED** (`HIGH`), with copy-paste remediation.
-- A stopped instance with every network gate open is reported as `INFO`: it becomes exposed the moment it starts. This only applies with an Elastic IP; an auto-assigned public IP is released on stop.
+- Only instances whose SG is open to the internet become candidates, so closed SGs produce no noise. If SG data is missing, every instance is a candidate.
+- Every gate is evaluated and kept as evidence, even after one blocks.
+- Any gate **BLOCKED** → **NOT_EXPOSED**, even if another gate's data is missing. No block, but a gate couldn't be evaluated → **UNKNOWN** (`UNVERIFIED`), naming the missing permission. All gates open → **EXPOSED** (`HIGH`), with copy-paste remediation.
+- A stopped instance with an Elastic IP and every network gate open → `INFO`: it becomes exposed the moment it starts.
 
-**Permissions.** Read-only, four actions (the scanner never calls a mutating API):
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [{
-    "Effect": "Allow",
-    "Action": ["ec2:DescribeInstances", "ec2:DescribeSecurityGroups",
-               "ec2:DescribeRouteTables", "ec2:DescribeNetworkAcls"],
-    "Resource": "*"
-  }]
-}
-```
-
-**Data in a real integration.** The fixtures use the exact response format of `aws ec2 describe-instances`
-(etc.) and decode straight into the `aws-sdk-go-v2` types. A live collector would call the same four APIs
-per region with paginators (`ec2.NewDescribeInstancesPaginator`, …) under an assumed read-only role,
-and write the same `Snapshot`. Nothing in the check changes.
+**Data and permissions.** Read-only: `ec2:DescribeInstances`, `DescribeSecurityGroups`,
+`DescribeRouteTables` and `DescribeNetworkAcls`. The fixtures decode straight into the `aws-sdk-go-v2`
+types, so a live collector (the same four calls per region, with paginators, under an assumed read-only
+role) produces the same `Snapshot` and nothing in the check changes.
 
 **Existing tools considered.**
-- *Prowler / ScoutSuite* flag "SG open to 0.0.0.0/0". That is the noisy signal this check refines. They could be used as candidate input.
-- *Amazon Inspector* produces network-reachability findings for EC2 and is the closest native equivalent. It has to be enabled, and paid for, in every account, so it is a good cross-check rather than something a third-party scanner can rely on.
-- *VPC Reachability Analyzer* proves one source→destination path at a time and is priced per analysis, so it doesn't fit a sweep of every instance.
-- *Network Access Analyzer* can express "internet → ENI" scopes and is a good **validation oracle** for this logic before production.
-- I wrote the evaluation myself because the evidence trail and the UNKNOWN semantics are the product here, and because the same normalized snapshot feeds checks B and C.
+- *Prowler / ScoutSuite* flag "SG open to 0.0.0.0/0", which is the noisy signal this check refines.
+- *Amazon Inspector* produces network-reachability findings for EC2, but it must be enabled and paid for in every account.
+- *Reachability Analyzer* checks one path at a time and is priced per analysis. *Network Access Analyzer* is a good validation oracle for this logic before production.
+- I wrote the evaluation myself because the evidence trail and the UNKNOWN semantics are the product here, and because the same snapshot feeds checks B and C.
 
-**Assumptions.**
-- "The internet" means an arbitrary IPv4 client. A rule counts only if its CIDR is `/0`.
-- The instance's subnet is the primary network interface's subnet.
-- An open path means exposed. Whether a process actually listens on the port is not visible from AWS APIs.
-- One account, one region per snapshot.
+**Assumptions.** An arbitrary IPv4 client (rules count only with a `/0` CIDR). The primary network
+interface's subnet. One account and region per snapshot. An open path means exposed: whether a process
+listens on the port is not visible from AWS APIs.
 
 ## 3. Implementation and results
 
@@ -127,13 +108,11 @@ fixtures/                     demo and missing-permission snapshots (see fixture
 lab/                          CloudFormation lab recreating the cases in a real account + live snapshot script
 ```
 
-### Test scenarios
+### Results
 
 Every instance in the demo snapshot ([fixture details](fixtures/README.md)) has the **same** security
 group (tcp/22 from `0.0.0.0/0`), and each differs from the exposed baseline by exactly one control.
 A naive scanner would flag all seven.
-
-### Results
 
 | Instance | Differs from the exposed baseline by | Verdict |
 |---|---|---|
@@ -146,11 +125,11 @@ A naive scanner would flag all seven.
 | `stopped` | instance stopped (keeps its Elastic IP), everything else open | NOT_EXPOSED, severity INFO (latent) |
 | `missing-permissions/exposed` | `ec2:DescribeNetworkAcls` denied | **UNKNOWN**, never "safe" |
 
-The scanner flags **2 of the 7** instances a naive check would flag, clears the other 5 with the exact
-blocking control as evidence, and reports the open but unattached security group as "considered, no finding".
+The scanner flags **2 of the 7**, clears the other 5 with the exact blocking control as evidence, and
+lists the open but unattached security group as "considered, no finding".
 
-**Finding vs. apparently similar non-finding.** Same security group, both instances have a public
-IP; the difference is where the subnet routes `0.0.0.0/0` (internet gateway vs. NAT gateway):
+**Finding vs. apparently similar non-finding.** Same security group, both instances have a public IP;
+the difference is where the subnet routes `0.0.0.0/0` (internet gateway vs. NAT gateway):
 
 ```
 EXPOSED     [HIGH] i-0exposed000000001 (exposed)  tcp/22 SSH
@@ -166,115 +145,74 @@ EXPOSED     [HIGH] i-0exposed000000001 (exposed)  tcp/22 SSH
     - Prefer AWS Systems Manager Session Manager or an EC2 Instance Connect Endpoint over a public SSH port.
     - If the instance does not need to be public, remove its public IP / Elastic IP or move it to a private subnet.
 
-...
-
 NOT_EXPOSED [NONE] i-0natsubnet0000001 (nat-subnet)  tcp/22 SSH
-  Security group is open to the internet on tcp/22, but traffic is blocked at route-table: rtb-0private00000001 via explicit subnet association: 0.0.0.0/0 -> nat-0a1b2c3d4e5f60001 (not an internet gateway; outbound-only or private path)
-    open     instance-state  running
-    open     security-group  sg-0open0ssh000000001 (open-ssh) allows tcp 22-22 from 0.0.0.0/0
-    open     public-ip       203.0.113.20 (Elastic IP)
+    ...
     BLOCKED  route-table     rtb-0private00000001 via explicit subnet association: 0.0.0.0/0 -> nat-0a1b2c3d4e5f60001 (not an internet gateway; outbound-only or private path)
-    open     nacl-inbound    acl-0default00000001: rule #100 (allow all protocols, all ports) from 0.0.0.0/0
-    open     nacl-outbound   acl-0default00000001: rule #100 (allow all protocols, all ports) permits replies to ephemeral ports 1024-65535
-
-...
+    ...
 
 Summary: 2 exposed, 0 unknown, 5 not exposed (of 7 candidates)
 ```
 
-**Missing permission.** The same exposed instance, with `ec2:DescribeNetworkAcls` denied:
-
-```
-UNKNOWN     [UNVERIFIED] i-0exposed000000001 (exposed)  tcp/22 SSH
-  No gate was seen blocking tcp/22, but some gates could not be evaluated. Treat as potentially exposed until verified.
-    ...
-    unknown  nacl-inbound    DescribeNetworkAcls failed with UnauthorizedOperation (scanner needs ec2:DescribeNetworkAcls)
-    unknown  nacl-outbound   DescribeNetworkAcls failed with UnauthorizedOperation (scanner needs ec2:DescribeNetworkAcls)
-```
-
 ## 4. Limits of the conclusion
 
-**Could make a NOT_EXPOSED instance actually exposed (false negatives):**
-- **Load balancers:** an internet-facing ALB/NLB, CloudFront or Global Accelerator in front of a *private* instance. This check only follows the direct path.
-- **Inspection appliances:** when the subnet's default route points to an AWS Network Firewall or Gateway Load Balancer endpoint (`vpce-…`), the route gate reports BLOCKED, although the firewall may let port 22 through.
-- **IPv6:** a `::/0` SG rule with a `::/0` route to the IGW. Out of scope here, but the same gate model applies.
-- **Partial ranges:** an SG or NACL rule for a narrower but still public range (e.g. a `/8`), or SG rules via prefix lists. These are treated as not matching "an arbitrary client", which understates partial exposure.
-- **Multiple network interfaces:** a second ENI in another subnet with its own public IP. The public IP may come from any interface, but routes and NACLs are evaluated for the primary subnet only.
+**Could hide real exposure (false negatives):**
+- **Load balancers:** an internet-facing ALB/NLB, CloudFront or Global Accelerator in front of a *private* instance. Only the direct path is followed.
+- **Inspection appliances:** a default route to an AWS Network Firewall or Gateway Load Balancer endpoint (`vpce-…`) is treated as blocked, although the firewall may let port 22 through.
+- **IPv6:** `::/0` rules and routes are out of scope here; the same gate model applies.
+- **Partial ranges:** narrower public CIDRs (e.g. a `/8`) and SG prefix lists are treated as not matching an arbitrary client.
+- **Multiple network interfaces:** the public IP may come from any interface, but routes and NACLs are evaluated for the primary subnet only.
 
-**Could make an EXPOSED instance actually safe (false positives):**
-- A host firewall (iptables, Windows Firewall), or nothing listening on the port.
-- Even when the port is reachable, key-only SSH or MFA lower the likelihood of compromise, but not the exposure.
+**Could make an EXPOSED finding safe in practice (false positives):** a host firewall, or nothing
+listening on the port. Key-only SSH or MFA lower the chance of compromise, but not the exposure.
 
-**Time:** the result is a point-in-time snapshot. A rule added a minute later is not seen until the next scan.
+**Time:** the result is a point-in-time snapshot.
 
 **Missing data or permissions.** Absence of data is never treated as a pass:
-- A denied API call (`UnauthorizedOperation`) is recorded in `errors.json`. Every gate that depends on it reports **UNKNOWN** with the exact missing action, the instance gets `UNVERIFIED` severity, and the report lists the data gap.
+- A denied call (`UnauthorizedOperation`) is recorded in `errors.json`. Every gate that depends on it reports **UNKNOWN** with the exact missing action, and the report lists the data gap.
 - A gate seen blocking still wins: no public IP is NOT_EXPOSED even when the NACLs are unknown.
-- If `DescribeInstances` itself is missing, the scan of that account fails loudly instead of returning "0 findings".
-- For a customer I would surface coverage separately: "N accounts or regions not fully scanned, because of X".
+- If `DescribeInstances` itself is missing, the scan fails loudly instead of returning "0 findings".
+- For a customer I would report coverage separately: "N accounts or regions not fully scanned, because of X".
 
 ## 5. Production scale: 3,000 environments
 
-**Onboarding and access.**
-- Deploy one read-only role per account via CloudFormation StackSets from the customer's AWS Organization. Service-managed StackSets skip the management account, so it needs its own stack.
-- The scanner assumes the role with `sts:AssumeRole` and an `ExternalId`, using short-lived credentials and no stored keys.
-- Beyond the four EC2 actions, the role needs `account:ListRegions` for region discovery.
-
-**Work model.**
-- One job per (account, region): 3,000 accounts × 17 default-enabled regions ≈ 50k small jobs.
-- Skip regions that are disabled (`account:ListRegions`) or empty.
-- Put the jobs on a durable queue, consumed by stateless workers that scale horizontally.
-- Retry with backoff and send poison jobs to a dead-letter queue.
-
-**Separate collection from evaluation.**
-- Collectors only call `Describe*` and store a normalized, versioned snapshot per account and region.
-- Evaluators are pure functions over snapshots, like this PoC. Improving a check means re-evaluating stored data, with no new AWS calls.
-- Cross-resource checks (B, C) join snapshots without re-collecting.
-
-**Respect AWS limits.**
-- EC2 API rate limits apply per account and region. Use a token bucket per (account, region), paginate, and back off with jitter on `RequestLimitExceeded`.
-- Spread the full scans over the day instead of starting all 50k at 00:00.
-
-**Be incremental.**
-- Use CloudTrail API events delivered through EventBridge to rescan only the affected account and region within minutes. Examples: `RunInstances`, `StartInstances`, `AuthorizeSecurityGroupIngress`, `ModifyNetworkInterfaceAttribute`, `CreateRoute`, `ReplaceNetworkAclEntry`, `AssociateAddress`. This needs a CloudTrail trail and an EventBridge rule in each region.
-- Keep a periodic full scan as reconciliation. AWS Config aggregators are an alternative inventory source.
-
-**Findings lifecycle.**
-- Give each finding a stable fingerprint (account, region, instance, port). Deduplicate, track first seen and last seen, and auto-resolve **only after a complete, error-free scan** of that account and region. A failed scan must not close findings.
-- Group findings by root cause (one SG exposing 40 instances is one fix), to reduce noise further.
+- **Access:** a read-only role in every account, deployed with CloudFormation StackSets from the customer's AWS Organization (the management account needs its own stack). The scanner assumes it with `sts:AssumeRole` and an `ExternalId`, with no stored keys. The role also needs `account:ListRegions`.
+- **Jobs:** one job per (account, region), 3,000 × 17 default regions ≈ 50k, skipping disabled or empty regions. Jobs go on a durable queue for stateless, horizontally scaled workers, with retries, backoff and a dead-letter queue.
+- **Collect separately from evaluating:** collectors only call `Describe*` and store a versioned snapshot. Evaluators are pure functions over it, like this PoC, so improving a check needs no new AWS calls, and checks B and C reuse the same data.
+- **AWS rate limits:** these apply per account and region, so use a token bucket per (account, region), paginate, back off with jitter on `RequestLimitExceeded`, and spread full scans over the day.
+- **Incremental:** CloudTrail events via EventBridge (`RunInstances`, `AuthorizeSecurityGroupIngress`, `ModifyNetworkInterfaceAttribute`, `CreateRoute`, `ReplaceNetworkAclEntry`, `AssociateAddress`, …; this needs a trail and a rule in each region) trigger a rescan of just that account and region. A periodic full scan reconciles.
+- **Findings lifecycle:** a stable fingerprint (account, region, instance, port) with dedup and first-seen / last-seen. Auto-resolve **only after a complete, error-free scan**: a failed scan must not close findings. Group by root cause, since one SG exposing 40 instances is one fix.
 
 **Before production, in priority order:**
-1. **Correctness on real accounts.** Run against a few real environments and diff against Network Access Analyzer. Every disagreement is a bug or a documented limit.
-2. **Close the biggest false negatives:** internet-facing load balancers, then IPv6.
-3. **Coverage and permission-gap reporting**, so a customer never mistakes "not scanned" for "secure".
-4. **Rate limiting and isolation:** one noisy tenant or throttled account must not stall the others. Tenant data is isolated.
-5. **Observability:** scan duration, error rate by API and code, and coverage per tenant.
+1. Correctness on real accounts: diff against Network Access Analyzer.
+2. Close the biggest false negatives: load balancers, then IPv6.
+3. Coverage and permission-gap reporting, so "not scanned" is never read as "secure".
+4. Rate limiting and tenant isolation.
+5. Observability: scan duration, errors by API, coverage per tenant.
 
 ## What I would do next
 
-1. A Go live collector (`-aws-profile`, `-region`) producing the same snapshot. Today [`lab/snapshot.sh`](lab/snapshot.sh) does this with the AWS CLI, and [`lab/`](lab/README.md) reproduces the demo cases in a real account.
+1. A Go live collector (`-aws-profile`, `-region`). Today [`lab/snapshot.sh`](lab/snapshot.sh) does this with the AWS CLI, and [`lab/`](lab/README.md) reproduces the demo cases in a real account.
 2. Internet-facing ALB/NLB path and IPv6.
 3. Check B on top of A: reachable instance × instance profile permissions gives a prioritised severity.
 4. Group findings by root-cause security group.
 
 ## Bonus: Aikido scan
 
-**What I did.**
-- Created a new personal AWS account (Free plan) as a sandbox.
-- Deployed the [live lab](lab/README.md) in `eu-north-1`: four instances sharing one SSH-open security group. One is really exposed, and three are each blocked by a different control (a main route table without an IGW route, a NACL deny, a NACL without a reply path). There is also an open security group attached to nothing.
-- Connected the account to Aikido through its read-only CloudFormation role (two attempts).
+**What I did:** created a personal AWS sandbox account (Free plan) and deployed the
+[live lab](lab/README.md) in `eu-north-1`. It has four instances sharing one SSH-open security group:
+one really exposed, three blocked by a different control each, plus an orphan open group. Then I
+connected the account to Aikido through its read-only CloudFormation role (two attempts).
 
 **Result: Aikido could not connect**, so no scan ran yet. The most likely cause is that the new AWS
-account was still being verified: the console said this can take up to two days, and CloudShell would
-not start meanwhile. The Free plan's restrictions I ran into may also play a part: the account was
-pinned to one region, limited to 8 vCPUs, and IAM roles were managed by the console.
+account was still being verified (the console said up to two days, and CloudShell would not start
+meanwhile). The Free plan's restrictions may also play a part: one region, 8 vCPUs, and IAM roles
+managed by the console.
 
-**Observation.** This is section 4's "missing permissions" case seen from the product side. Aikido said
-explicitly that it could not connect, which is right. But the same page also showed a green
-**"0 issues"** badge, which at a glance reads as "secure" when it means "not scanned". This scanner
-reports that state as `UNKNOWN`, never as zero findings.
+**Observation:** this is section 4's "missing permissions" case seen from the product side. Aikido said
+explicitly that it could not connect, which is right, but the same page showed a green **"0 issues"**
+badge, which reads as "secure" when it means "not scanned". This scanner reports that state as `UNKNOWN`.
 
 **To do, once the account is verified:**
 1. Reconnect Aikido and let it scan.
-2. Run this scanner on the same live lab with [`lab/snapshot.sh`](lab/snapshot.sh). So far it has only run on fixtures.
-3. Compare the two tools on each lab instance (expected verdicts in [lab/README.md](lab/README.md)). Does Aikido flag the open SSH group on all four instances, or only on the one that is really reachable? Does it ignore the orphan group?
+2. Run this scanner on the same lab with [`lab/snapshot.sh`](lab/snapshot.sh). So far it has only run on fixtures.
+3. Compare the two tools on each lab instance. Does Aikido flag the open SSH group on all four, or only on the one that is really reachable? Does it ignore the orphan group?
