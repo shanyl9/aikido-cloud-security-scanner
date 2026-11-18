@@ -1,86 +1,45 @@
-# Cloud security scanner PoC: is that open port *actually* reachable?
+# Cloud Security Case: AWS Exposure Scanner (PoC)
 
-A small AWS scanner, written in Go, that answers one question with evidence: **can an arbitrary internet
-client reach an administrative port (SSH 22, RDP 3389) on this EC2 instance?**
+## Background
 
-A security group allowing `0.0.0.0/0` on port 22 is the most common cloud "finding", and often a
-false positive. The instance may have no public IP, sit in a subnet that only routes out through NAT,
-or be behind a network ACL that blocks the port or the reply. This scanner follows the packet through
-every control on the path and reports a finding only when all of them let it through.
+This repository is my answer to the *Cloud Security Case*: design a lightweight cloud security scanner,
+propose three checks, implement one as a small proof of concept, and discuss its limits and how it
+would run at production scale.
 
-## Quick start
+The brief's central point is to go **beyond individual configuration checks to actual exposure**, and to
+deliver accurate findings without false-positive noise. I chose **AWS** and a **networking** check that
+does exactly that. The classic finding "security group allows `0.0.0.0/0` on port 22" is often a false
+positive: the instance may have no public IP, sit in a subnet that only routes out through NAT, or be
+behind a network ACL that blocks the port or the reply. This scanner follows the packet through every
+control on the path and reports a finding only when all of them let it through, with the evidence for each.
 
-Requires Go 1.24+. No AWS account needed: the scanner runs on recorded API responses (see [fixtures](fixtures/README.md)).
+| Brief | Section |
+|---|---|
+| 1. Propose three checks | [1. Proposed checks](#1-proposed-checks) |
+| 2. Choose one, explain the approach | [2. Approach](#2-approach-effective-internet-exposure) |
+| 3. Implement it, finding vs. similar non-finding | [3. Implementation and results](#3-implementation-and-results) |
+| 4. Limits, missing data or permissions | [4. Limits](#4-limits-of-the-conclusion) |
+| 5. Production scale (3,000 environments) | [5. Production scale](#5-production-scale-3000-environments) |
+| Bonus: scan with Aikido | [Bonus](#bonus-aikido-scan) |
 
-```bash
-go run ./cmd/scanner -snapshot fixtures/demo                  # 7 look-alike instances
-go run ./cmd/scanner -snapshot fixtures/missing-permissions   # a denied API call
-go run ./cmd/scanner -snapshot fixtures/demo -format json     # machine-readable
-go run ./cmd/scanner -snapshot fixtures/demo -ports 22:SSH,3389:RDP,5432:Postgres
-go test ./...
-```
-
-## Example: same security group, different verdicts
-
-Every instance in `fixtures/demo` has the same security group (tcp/22 from `0.0.0.0/0`). Only two are reachable.
-
-```
-EXPOSED     [HIGH] i-0exposed000000001 (exposed)  tcp/22 SSH
-  SSH (tcp/22) is reachable from any internet address: every layer on the path allows it.
-    open     instance-state  running
-    open     security-group  sg-0open0ssh000000001 (open-ssh) allows tcp 22-22 from 0.0.0.0/0
-    open     public-ip       203.0.113.10
-    open     route-table     rtb-0public000000001 via explicit subnet association: 0.0.0.0/0 -> igw-0a1b2c3d4e5f60001
-    open     nacl-inbound    acl-0default00000001: rule #100 (allow all protocols, all ports) from 0.0.0.0/0
-    open     nacl-outbound   acl-0default00000001: rule #100 (allow all protocols, all ports) permits replies to ephemeral ports 1024-65535
-  Remediation:
-    - Restrict sg-0open0ssh000000001 to known source ranges: aws ec2 revoke-security-group-ingress --group-id sg-0open0ssh000000001 --protocol tcp --port 22-22 --cidr 0.0.0.0/0
-    - Prefer AWS Systems Manager Session Manager or an EC2 Instance Connect Endpoint over a public SSH port.
-    - If the instance does not need to be public, remove its public IP / Elastic IP or move it to a private subnet.
-
-NOT_EXPOSED [NONE] i-0natsubnet0000001 (nat-subnet)  tcp/22 SSH
-  Security group is open to the internet on tcp/22, but traffic is blocked at route-table: rtb-0private00000001 via explicit subnet association: 0.0.0.0/0 -> nat-0a1b2c3d4e5f60001 (not an internet gateway; outbound-only or private path)
-    open     instance-state  running
-    open     security-group  sg-0open0ssh000000001 (open-ssh) allows tcp 22-22 from 0.0.0.0/0
-    open     public-ip       203.0.113.20 (Elastic IP)
-    BLOCKED  route-table     rtb-0private00000001 via explicit subnet association: 0.0.0.0/0 -> nat-0a1b2c3d4e5f60001 (not an internet gateway; outbound-only or private path)
-    ...
-
-Considered, no finding:
-  sg-0orphan0open00001 allows all traffic from 0.0.0.0/0 but is not attached to any EC2 instance in this snapshot (other resource types are not evaluated)
-
-Summary: 2 exposed, 0 unknown, 5 not exposed (of 7 candidates with an internet-open security group)
-```
-
-All demo cases:
-
-| Instance | Differs from the exposed baseline by | Verdict |
-|---|---|---|
-| `exposed` | (baseline) | **EXPOSED** |
-| `main-rt` | subnet has no route table of its own; the VPC **main** table routes to the IGW | **EXPOSED** |
-| `no-public-ip` | no public IP | NOT_EXPOSED |
-| `nat-subnet` | Elastic IP, but `0.0.0.0/0` goes to a NAT gateway | NOT_EXPOSED |
-| `nacl-deny` | NACL rule #90 denies tcp/22 before rule #100 allows all | NOT_EXPOSED |
-| `nacl-no-ephemeral` | NACL allows 22 in, but only 443 out: the reply is dropped | NOT_EXPOSED |
-| `stopped` | instance stopped, everything else open | NOT_EXPOSED, severity INFO (latent) |
-| `missing-permissions/exposed` | `ec2:DescribeNetworkAcls` denied | **UNKNOWN**, never "safe" |
+Written in Go. It runs on recorded AWS API responses (fixtures), so no AWS account is needed to try it.
 
 ---
 
-## 1. Three proposed checks
+## 1. Proposed checks
 
 **A. Effective internet exposure of compute (implemented).**
 *Risk:* an admin service (SSH, RDP, a database) reachable from the whole internet is a direct entry
 point for brute force, credential stuffing and exploitation of unpatched services.
-*Why first:* it is the most common real attack entry point, and also the noisiest naive check
-("SG allows 0.0.0.0/0"). Turning it into a verified, explained finding removes the most false positives
-per unit of work, which is exactly the noise problem customers complain about.
+*Why first:* it is the most common real attack entry point, and also the noisiest naive check. Turning
+"SG allows 0.0.0.0/0" into a verified, explained finding removes the most false positives per unit of
+work, which is exactly the noise problem customers complain about.
 
 **B. Exposed workload with a powerful IAM role (toxic combination).**
 *Risk:* an internet-reachable instance whose instance profile allows `*:*`, `iam:PassRole` or broad
 data access. One compromised host becomes an account takeover or a data breach.
-*Why next:* it ranks risk by blast radius instead of listing misconfigurations one by one. It reuses
-A's output directly: A says which instances are reachable, B says how bad a compromise of each would be.
+*Why next:* it ranks risk by blast radius instead of listing misconfigurations one by one, and it builds
+directly on A. A says which instances are reachable; B says how bad a compromise of each would be.
 
 **C. Effectively public S3 bucket.**
 *Risk:* data leakage (backups, Terraform state, logs, customer files) or tampering, if writes are public.
@@ -88,7 +47,7 @@ A's output directly: A says which instances are reachable, B says how bad a comp
 `Principal: "*"` is not public if account-level Block Public Access is on, or if a condition pins it to a
 VPC endpoint or an organization. A public ACL is ignored when Object Ownership is `BucketOwnerEnforced`.
 
-## 2. Approach for check A
+## 2. Approach: effective internet exposure
 
 **Model.** A packet from an arbitrary internet address to `tcp/<port>` must pass six gates, and the reply must get back:
 
@@ -134,7 +93,27 @@ write the same `Snapshot`. Nothing in the check changes.
 - *Network Access Analyzer* can express "internet → ENI" scopes and is a good **validation oracle** for this logic before production.
 - I wrote the evaluation myself because the evidence trail and the UNKNOWN semantics are the product here, and because the same normalized snapshot feeds checks B and C.
 
-**Code layout.**
+**Assumptions.**
+- "The internet" means an arbitrary IPv4 client. A rule counts only if its CIDR is `/0`.
+- The instance's subnet is the primary network interface's subnet.
+- An open path means exposed. Whether a process actually listens on the port is not visible from AWS APIs.
+- One account, one region per snapshot.
+
+## 3. Implementation and results
+
+### How to run
+
+Requires Go 1.24+.
+
+```bash
+go run ./cmd/scanner -snapshot fixtures/demo                  # 7 look-alike instances
+go run ./cmd/scanner -snapshot fixtures/missing-permissions   # a denied API call
+go run ./cmd/scanner -snapshot fixtures/demo -format json     # machine-readable output
+go run ./cmd/scanner -snapshot fixtures/demo -ports 22:SSH,3389:RDP,5432:Postgres
+go test ./...
+```
+
+### Code layout
 
 ```
 cmd/scanner/                  CLI: flags, text/JSON output
@@ -144,17 +123,71 @@ internal/exposure/gates/      one file per AWS control; each returns OPEN / BLOC
 fixtures/                     demo and missing-permission snapshots (see fixtures/README.md)
 ```
 
-## 3. Assumptions
+### Test scenarios
 
-- "The internet" means an arbitrary IPv4 client. A rule counts only if its CIDR is `/0`.
-- The instance's subnet is the primary network interface's subnet. Instances with several interfaces in different subnets are not modelled.
-- An open path means exposed. Whether a process actually listens on the port is not visible from AWS APIs (see limits).
-- One account, one region per snapshot.
+Every instance in [`fixtures/demo`](fixtures/README.md) has the **same** security group (tcp/22 from
+`0.0.0.0/0`), and each differs from the exposed baseline by exactly one control. A naive scanner would
+flag all seven.
 
-## 4. Limits: what could change the conclusion
+### Results
+
+| Instance | Differs from the exposed baseline by | Verdict |
+|---|---|---|
+| `exposed` | (baseline) | **EXPOSED** |
+| `main-rt` | subnet has no route table of its own; the VPC **main** table routes to the IGW | **EXPOSED** |
+| `no-public-ip` | no public IP | NOT_EXPOSED |
+| `nat-subnet` | Elastic IP, but `0.0.0.0/0` goes to a NAT gateway | NOT_EXPOSED |
+| `nacl-deny` | NACL rule #90 denies tcp/22 before rule #100 allows all | NOT_EXPOSED |
+| `nacl-no-ephemeral` | NACL allows 22 in, but only 443 out: the reply is dropped | NOT_EXPOSED |
+| `stopped` | instance stopped, everything else open | NOT_EXPOSED, severity INFO (latent) |
+| `missing-permissions/exposed` | `ec2:DescribeNetworkAcls` denied | **UNKNOWN**, never "safe" |
+
+The scanner flags **2 of the 7** instances a naive check would flag, clears the other 5 with the exact
+blocking control as evidence, and reports the open but unattached security group as "considered, no finding".
+
+**Finding vs. apparently similar non-finding.** Same security group, both instances have a public
+IP; the difference is where the subnet routes `0.0.0.0/0` (internet gateway vs. NAT gateway):
+
+```
+EXPOSED     [HIGH] i-0exposed000000001 (exposed)  tcp/22 SSH
+  SSH (tcp/22) is reachable from any internet address: every layer on the path allows it.
+    open     instance-state  running
+    open     security-group  sg-0open0ssh000000001 (open-ssh) allows tcp 22-22 from 0.0.0.0/0
+    open     public-ip       203.0.113.10
+    open     route-table     rtb-0public000000001 via explicit subnet association: 0.0.0.0/0 -> igw-0a1b2c3d4e5f60001
+    open     nacl-inbound    acl-0default00000001: rule #100 (allow all protocols, all ports) from 0.0.0.0/0
+    open     nacl-outbound   acl-0default00000001: rule #100 (allow all protocols, all ports) permits replies to ephemeral ports 1024-65535
+  Remediation:
+    - Restrict sg-0open0ssh000000001 to known source ranges: aws ec2 revoke-security-group-ingress --group-id sg-0open0ssh000000001 --protocol tcp --port 22-22 --cidr 0.0.0.0/0
+    - Prefer AWS Systems Manager Session Manager or an EC2 Instance Connect Endpoint over a public SSH port.
+    - If the instance does not need to be public, remove its public IP / Elastic IP or move it to a private subnet.
+
+NOT_EXPOSED [NONE] i-0natsubnet0000001 (nat-subnet)  tcp/22 SSH
+  Security group is open to the internet on tcp/22, but traffic is blocked at route-table: rtb-0private00000001 via explicit subnet association: 0.0.0.0/0 -> nat-0a1b2c3d4e5f60001 (not an internet gateway; outbound-only or private path)
+    open     instance-state  running
+    open     security-group  sg-0open0ssh000000001 (open-ssh) allows tcp 22-22 from 0.0.0.0/0
+    open     public-ip       203.0.113.20 (Elastic IP)
+    BLOCKED  route-table     rtb-0private00000001 via explicit subnet association: 0.0.0.0/0 -> nat-0a1b2c3d4e5f60001 (not an internet gateway; outbound-only or private path)
+    open     nacl-inbound    acl-0default00000001: rule #100 (allow all protocols, all ports) from 0.0.0.0/0
+    open     nacl-outbound   acl-0default00000001: rule #100 (allow all protocols, all ports) permits replies to ephemeral ports 1024-65535
+
+Summary: 2 exposed, 0 unknown, 5 not exposed (of 7 candidates with an internet-open security group)
+```
+
+**Missing permission.** The same exposed instance, with `ec2:DescribeNetworkAcls` denied:
+
+```
+UNKNOWN     [UNVERIFIED] i-0exposed000000001 (exposed)  tcp/22 SSH
+  No layer was seen blocking tcp/22, but some layers could not be evaluated. Treat as potentially exposed until verified.
+    ...
+    unknown  nacl-inbound    DescribeNetworkAcls failed with UnauthorizedOperation (scanner needs ec2:DescribeNetworkAcls)
+    unknown  nacl-outbound   DescribeNetworkAcls failed with UnauthorizedOperation (scanner needs ec2:DescribeNetworkAcls)
+```
+
+## 4. Limits of the conclusion
 
 **Could make a NOT_EXPOSED instance actually exposed (false negatives):**
-- **Load balancers:** an internet-facing ALB/NLB, CloudFront or Global Accelerator in front of a *private* instance. Check A only follows the direct path.
+- **Load balancers:** an internet-facing ALB/NLB, CloudFront or Global Accelerator in front of a *private* instance. This check only follows the direct path.
 - **IPv6:** a `::/0` SG rule with a `::/0` route to the IGW. Out of scope here, but the same gate model applies.
 - **Partial ranges:** an SG or NACL rule for a narrower but still public range (e.g. a `/8`), or SG rules via prefix lists. These are treated as not matching "an arbitrary client", which understates partial exposure.
 - **Other attached ENIs**, in a public subnet, with their own public IP.
@@ -167,7 +200,7 @@ fixtures/                     demo and missing-permission snapshots (see fixture
 **Time:** the result is a point-in-time snapshot. A rule added a minute later is not seen until the next scan.
 
 **Missing data or permissions.** Absence of data is never treated as a pass:
-- A denied API call (`UnauthorizedOperation`) is recorded in `errors.json`. Every gate that depends on it reports **UNKNOWN** with the exact missing action (`ec2:DescribeNetworkAcls`), the instance gets `UNVERIFIED` severity, and the report lists the data gap.
+- A denied API call (`UnauthorizedOperation`) is recorded in `errors.json`. Every gate that depends on it reports **UNKNOWN** with the exact missing action, the instance gets `UNVERIFIED` severity, and the report lists the data gap.
 - A gate seen blocking still wins: no public IP is NOT_EXPOSED even when the NACLs are unknown.
 - If `DescribeInstances` itself is missing, the scan of that account fails loudly instead of returning "0 findings".
 - For a customer I would surface coverage separately: "N accounts or regions not fully scanned, because of X".
