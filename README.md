@@ -283,7 +283,10 @@ really means "not scanned". This scanner reports that state as `UNKNOWN`, never 
 **To do: the comparison.** The most likely blocker is that the new AWS account is not verified yet.
 Once AWS finishes verifying it:
 1. Delete the cloud in Aikido and connect it again, then let it scan.
-2. Compare, for each lab instance, Aikido's result with this scanner's verdict (see the expected
+2. Run this scanner on the same live lab: capture a snapshot with [`lab/snapshot.sh`](lab/snapshot.sh)
+   (in CloudShell) and run `go run ./cmd/scanner -snapshot <dir>` on it. So far the scanner has only
+   run on fixtures.
+3. Compare, for each lab instance, Aikido's result with this scanner's verdict (see the expected
    verdicts in [lab/README.md](lab/README.md)): does Aikido flag the open SSH group on all four
    instances, or only on the one that is really reachable? Does it ignore the orphan group?
-3. Replace this section with that comparison.
+4. Replace this section with that comparison.
