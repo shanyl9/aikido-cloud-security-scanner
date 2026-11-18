@@ -14,6 +14,16 @@ Parameters:
   AmiId:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+  IncludeNoPublicIpInstance:
+    Type: String
+    AllowedValues: ["true", "false"]
+    Default: "false"
+    Description: >
+      Off by default: new accounts are limited to 8 vCPUs, and four t3.micro (2 vCPUs each) already
+      use them all. Turn on with t2.micro (1 vCPU) or a raised quota.
+
+Conditions:
+  WithNoPublicIp: !Equals [!Ref IncludeNoPublicIpInstance, "true"]
 
 Resources:
   # ---------------------------------------------------------------- network
@@ -201,6 +211,7 @@ Resources:
   # Expected: NOT_EXPOSED (public-ip). Same subnet as the exposed one, no public IP.
   NoPublicIpInstance:
     Type: AWS::EC2::Instance
+    Condition: WithNoPublicIp
     Properties:
       ImageId: !Ref AmiId
       InstanceType: !Ref InstanceType

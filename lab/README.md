@@ -9,7 +9,7 @@ so nobody can log in. Cost is a few cents per hour: delete the stack the same da
 | Instance (Name tag) | What blocks it | Expected verdict |
 |---|---|---|
 | `lab-exposed` | nothing | **EXPOSED** |
-| `lab-no-public-ip` | no public IP | NOT_EXPOSED (public-ip) |
+| `lab-no-public-ip` (optional, off by default) | no public IP | NOT_EXPOSED (public-ip) |
 | `lab-main-rt-no-igw` | subnet has no route table of its own; the VPC main table has only the local route | NOT_EXPOSED (route-table) |
 | `lab-nacl-deny` | NACL rule 90 denies tcp/22 before rule 100 allows all | NOT_EXPOSED (nacl-inbound) |
 | `lab-nacl-no-ephemeral` | NACL allows 22 in, only 443 out | NOT_EXPOSED (nacl-outbound) |
@@ -29,9 +29,10 @@ aws cloudformation deploy --template-file exposure-lab.yaml --stack-name exposur
 aws cloudformation describe-stacks --stack-name exposure-lab --query 'Stacks[0].Outputs' --output table
 ```
 
-New accounts often have an 8-vCPU limit for standard instances, and five `t3.micro` (2 vCPUs each)
-exceed it. Use `--parameter-overrides InstanceType=t2.micro` (1 vCPU) in a region that offers t2,
-such as `eu-central-1` or `us-east-1` (`eu-north-1` does not).
+New accounts are limited to 8 vCPUs of standard instances, so by default the lab creates four
+`t3.micro` (2 vCPUs each) and skips `lab-no-public-ip` (that case is covered by the fixtures). To
+include it, use `t2.micro` (1 vCPU, not offered in every region, e.g. not `eu-north-1`) or a raised
+quota: `--parameter-overrides InstanceType=t2.micro IncludeNoPublicIpInstance=true`.
 
 **3. Connect Aikido and let it scan.** In Aikido: **Connect cloud → AWS** and follow the wizard (it
 deploys a read-only role via CloudFormation). Wait until the cloud scan finishes.
