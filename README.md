@@ -280,7 +280,10 @@ connect, rather than reporting the account as clean. One thing I would change: t
 shows a green **"0 issues"** badge next to that warning. At a glance that reads as "secure", when it
 really means "not scanned". This scanner reports that state as `UNKNOWN`, never as zero findings.
 
-**Next.** Once the account is verified (or upgraded to the Paid plan):
-1. Reconnect Aikido and let it scan.
-2. Capture a live snapshot with [`lab/snapshot.sh`](lab/snapshot.sh) and run this scanner on it.
-3. Compare, for each lab instance, Aikido's result with this scanner's verdict.
+**To do: the comparison.** The most likely blocker is that the new AWS account is not verified yet.
+Once AWS finishes verifying it:
+1. Delete the cloud in Aikido and connect it again, then let it scan.
+2. Compare, for each lab instance, Aikido's result with this scanner's verdict (see the expected
+   verdicts in [lab/README.md](lab/README.md)): does Aikido flag the open SSH group on all four
+   instances, or only on the one that is really reachable? Does it ignore the orphan group?
+3. Replace this section with that comparison.
