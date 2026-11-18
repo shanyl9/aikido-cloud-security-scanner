@@ -6,21 +6,14 @@ package exposure
 
 import (
 	"fmt"
-	"net/netip"
 	"sort"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 
+	"github.com/shanyl9/aikido-cloud-security-scanner/internal/exposure/gates"
 	"github.com/shanyl9/aikido-cloud-security-scanner/internal/snapshot"
 )
-
-// isInternet reports whether a CIDR covers the whole IPv4 internet (prefix length 0).
-// Shared by the security group, route table and network ACL checks.
-func isInternet(cidr string) bool {
-	p, err := netip.ParsePrefix(cidr)
-	return err == nil && p.Addr().Is4() && p.Bits() == 0
-}
 
 // Evaluate runs the check over every instance in the snapshot.
 func Evaluate(s *snapshot.Snapshot, ports []Port) Report {
@@ -33,7 +26,7 @@ func Evaluate(s *snapshot.Snapshot, ports []Port) Report {
 
 	attached := map[string]bool{}
 	for _, inst := range s.Instances {
-		for _, id := range instanceGroupIDs(inst) {
+		for _, id := range gates.InstanceGroupIDs(inst) {
 			attached[id] = true
 		}
 		for _, p := range ports {
@@ -50,11 +43,11 @@ func Evaluate(s *snapshot.Snapshot, ports []Port) Report {
 			continue
 		}
 		for _, p := range ports {
-			if perm, cidr, open := worldOpenRule(g, p.Number); open {
+			if perm, cidr, open := gates.WorldOpenRule(g, p.Number); open {
 				rep.IgnoredGroups = append(rep.IgnoredGroups, IgnoredGroup{
 					GroupID: id,
 					Reason: fmt.Sprintf("allows %s but is not attached to any EC2 instance in this snapshot (other resource types are not evaluated)",
-						describePermission(perm, cidr)),
+						gates.DescribePermission(perm, cidr)),
 				})
 				break
 			}
@@ -79,12 +72,12 @@ func rank(s Status) int {
 // blocks, so the output shows the full picture. ok=false means no attached
 // security group opens the port, so the instance is not a candidate.
 func evaluateInstance(s *snapshot.Snapshot, inst types.Instance, port Port) (Finding, bool) {
-	sgStep, sg, perm, cidr, candidate := checkSecurityGroups(s, inst, port.Number)
+	sgStep, sg, perm, cidr, candidate := gates.CheckSecurityGroups(s, inst, port.Number)
 	if !candidate {
 		return Finding{}, false
 	}
-	nIn, nOut := checkNACL(s, inst, port.Number)
-	steps := []Step{checkState(inst), sgStep, checkPublicIP(inst), checkRoute(s, inst), nIn, nOut}
+	nIn, nOut := gates.CheckNACL(s, inst, port.Number)
+	steps := []gates.Step{gates.CheckState(inst), sgStep, gates.CheckPublicIP(inst), gates.CheckRoute(s, inst), nIn, nOut}
 
 	f := Finding{
 		AccountID:  s.AccountID,
@@ -95,19 +88,19 @@ func evaluateInstance(s *snapshot.Snapshot, inst types.Instance, port Port) (Fin
 		Evidence:   steps,
 	}
 
-	var blocking []Step
+	var blocking []gates.Step
 	unknown := false
 	for _, st := range steps {
 		switch st.Result {
-		case Blocked:
+		case gates.Blocked:
 			blocking = append(blocking, st)
-		case UnknownResult:
+		case gates.Unknown:
 			unknown = true
 		}
 	}
 
 	switch {
-	case len(blocking) == 1 && blocking[0].Layer == LayerState && !unknown:
+	case len(blocking) == 1 && blocking[0].Layer == gates.LayerState && !unknown:
 		// Every network layer is open; only the instance being stopped protects it.
 		f.Status, f.Severity = NotExposed, "INFO"
 		f.Summary = fmt.Sprintf("Not reachable now (instance is %s), but every network layer is open: it becomes exposed on %s as soon as it starts.", inst.State.Name, port.Service)

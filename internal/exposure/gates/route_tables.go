@@ -1,4 +1,4 @@
-package exposure
+package gates
 
 import (
 	"fmt"
@@ -45,16 +45,16 @@ func routeTarget(r types.Route) string {
 	return "unknown target"
 }
 
-func checkRoute(s *snapshot.Snapshot, inst types.Instance) Step {
+func CheckRoute(s *snapshot.Snapshot, inst types.Instance) Step {
 	subnet := aws.ToString(inst.SubnetId)
 	st := Step{Layer: LayerRoute, Resource: subnet}
 	if !s.Has(snapshot.RouteTables) {
-		st.Result, st.Detail = UnknownResult, s.Gap(snapshot.RouteTables)
+		st.Result, st.Detail = Unknown, s.Gap(snapshot.RouteTables)
 		return st
 	}
 	rt, how := routeTableFor(s.RouteTables, aws.ToString(inst.VpcId), subnet)
 	if rt == nil {
-		st.Result, st.Detail = UnknownResult, "no route table found for "+subnet
+		st.Result, st.Detail = Unknown, "no route table found for "+subnet
 		return st
 	}
 	st.Resource = aws.ToString(rt.RouteTableId)

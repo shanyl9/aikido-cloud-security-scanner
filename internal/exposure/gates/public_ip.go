@@ -1,4 +1,4 @@
-package exposure
+package gates
 
 import (
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -7,7 +7,7 @@ import (
 
 // Gate 3: the instance needs a public IPv4 address or an Elastic IP.
 
-func checkPublicIP(inst types.Instance) Step {
+func CheckPublicIP(inst types.Instance) Step {
 	st := Step{Layer: LayerPublicIP, Resource: aws.ToString(inst.InstanceId)}
 	ip := aws.ToString(inst.PublicIpAddress)
 	if ip == "" {

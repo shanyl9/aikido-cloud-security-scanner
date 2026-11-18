@@ -1,4 +1,4 @@
-package exposure
+package gates
 
 import (
 	"fmt"
@@ -63,21 +63,21 @@ func describeEntry(e *types.NetworkAclEntry) string {
 	return fmt.Sprintf("rule #%d (%s %s, %s)", aws.ToInt32(e.RuleNumber), e.RuleAction, proto, ports)
 }
 
-// checkNACL evaluates both directions: inbound to the port, and outbound for the
+// CheckNACL evaluates both directions: inbound to the port, and outbound for the
 // reply. NACLs are stateless, so the reply to the client's ephemeral port
 // (1024-65535) must be allowed explicitly.
-func checkNACL(s *snapshot.Snapshot, inst types.Instance, port int) (in, out Step) {
+func CheckNACL(s *snapshot.Snapshot, inst types.Instance, port int) (in, out Step) {
 	subnet := aws.ToString(inst.SubnetId)
 	in = Step{Layer: LayerNACLInbound, Resource: subnet}
 	out = Step{Layer: LayerNACLOutbound, Resource: subnet}
 	if !s.Has(snapshot.NetworkAcls) {
-		in.Result, in.Detail = UnknownResult, s.Gap(snapshot.NetworkAcls)
-		out.Result, out.Detail = UnknownResult, s.Gap(snapshot.NetworkAcls)
+		in.Result, in.Detail = Unknown, s.Gap(snapshot.NetworkAcls)
+		out.Result, out.Detail = Unknown, s.Gap(snapshot.NetworkAcls)
 		return in, out
 	}
 	acl := naclFor(s.NetworkAcls, subnet)
 	if acl == nil {
-		in.Result, in.Detail = UnknownResult, "no network ACL association found for "+subnet
+		in.Result, in.Detail = Unknown, "no network ACL association found for "+subnet
 		out.Result, out.Detail = in.Result, in.Detail
 		return in, out
 	}

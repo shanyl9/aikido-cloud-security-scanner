@@ -1,4 +1,4 @@
-package exposure
+package gates
 
 import (
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -7,7 +7,7 @@ import (
 
 // Gate 1: an instance that is not running cannot be reached.
 
-func checkState(inst types.Instance) Step {
+func CheckState(inst types.Instance) Step {
 	st := Step{Layer: LayerState, Resource: aws.ToString(inst.InstanceId)}
 	name := types.InstanceStateName("")
 	if inst.State != nil {

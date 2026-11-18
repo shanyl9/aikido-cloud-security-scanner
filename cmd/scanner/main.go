@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/shanyl9/aikido-cloud-security-scanner/internal/exposure"
+	"github.com/shanyl9/aikido-cloud-security-scanner/internal/exposure/gates"
 	"github.com/shanyl9/aikido-cloud-security-scanner/internal/snapshot"
 )
 
@@ -64,7 +65,7 @@ func parsePorts(s string) ([]exposure.Port, error) {
 	return out, nil
 }
 
-var marks = map[exposure.Result]string{exposure.Open: "open   ", exposure.Blocked: "BLOCKED", exposure.UnknownResult: "unknown"}
+var marks = map[gates.Result]string{gates.Open: "open   ", gates.Blocked: "BLOCKED", gates.Unknown: "unknown"}
 
 func printText(w io.Writer, dir string, rep exposure.Report) {
 	fmt.Fprintf(w, "Snapshot %s (account %s)\n", dir, rep.AccountID)

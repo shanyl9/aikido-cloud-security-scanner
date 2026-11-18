@@ -1,4 +1,4 @@
-package exposure
+package gates
 
 import (
 	"fmt"
@@ -13,9 +13,9 @@ import (
 // Gate 2: an attached security group must allow tcp/<port> from the whole internet.
 // Instances without such a rule are not candidates and produce no result.
 
-// instanceGroupIDs returns every security group attached to the instance, from
+// InstanceGroupIDs returns every security group attached to the instance, from
 // the instance itself and from each of its network interfaces.
-func instanceGroupIDs(inst types.Instance) []string {
+func InstanceGroupIDs(inst types.Instance) []string {
 	seen := map[string]bool{}
 	for _, g := range inst.SecurityGroups {
 		seen[aws.ToString(g.GroupId)] = true
@@ -33,8 +33,8 @@ func instanceGroupIDs(inst types.Instance) []string {
 	return ids
 }
 
-// worldOpenRule finds an ingress rule in g that lets any IPv4 address reach tcp/port.
-func worldOpenRule(g types.SecurityGroup, port int) (types.IpPermission, string, bool) {
+// WorldOpenRule finds an ingress rule in g that lets any IPv4 address reach tcp/port.
+func WorldOpenRule(g types.SecurityGroup, port int) (types.IpPermission, string, bool) {
 	for _, p := range g.IpPermissions {
 		proto := aws.ToString(p.IpProtocol)
 		portOK := false
@@ -56,20 +56,20 @@ func worldOpenRule(g types.SecurityGroup, port int) (types.IpPermission, string,
 	return types.IpPermission{}, "", false
 }
 
-func describePermission(p types.IpPermission, cidr string) string {
+func DescribePermission(p types.IpPermission, cidr string) string {
 	if aws.ToString(p.IpProtocol) == "-1" {
 		return "all traffic from " + cidr
 	}
 	return fmt.Sprintf("tcp %d-%d from %s", aws.ToInt32(p.FromPort), aws.ToInt32(p.ToPort), cidr)
 }
 
-// checkSecurityGroups returns the open step and the matching group, if any.
+// CheckSecurityGroups returns the open step and the matching group, if any.
 // ok=false means no attached group opens the port to the internet: not a candidate.
-func checkSecurityGroups(s *snapshot.Snapshot, inst types.Instance, port int) (step Step, sg *types.SecurityGroup, perm types.IpPermission, cidr string, ok bool) {
+func CheckSecurityGroups(s *snapshot.Snapshot, inst types.Instance, port int) (step Step, sg *types.SecurityGroup, perm types.IpPermission, cidr string, ok bool) {
 	step = Step{Layer: LayerSecurityGroup}
-	ids := instanceGroupIDs(inst)
+	ids := InstanceGroupIDs(inst)
 	if !s.Has(snapshot.SecurityGroups) {
-		step.Result, step.Resource = UnknownResult, strings.Join(ids, ",")
+		step.Result, step.Resource = Unknown, strings.Join(ids, ",")
 		step.Detail = s.Gap(snapshot.SecurityGroups)
 		return step, nil, perm, "", true
 	}
@@ -78,9 +78,9 @@ func checkSecurityGroups(s *snapshot.Snapshot, inst types.Instance, port int) (s
 		if !found {
 			continue
 		}
-		if p, c, open := worldOpenRule(g, port); open {
+		if p, c, open := WorldOpenRule(g, port); open {
 			step.Result, step.Resource = Open, id
-			step.Detail = fmt.Sprintf("%s (%s) allows %s", id, aws.ToString(g.GroupName), describePermission(p, c))
+			step.Detail = fmt.Sprintf("%s (%s) allows %s", id, aws.ToString(g.GroupName), DescribePermission(p, c))
 			return step, &g, p, c, true
 		}
 	}
