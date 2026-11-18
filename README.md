@@ -121,6 +121,7 @@ internal/snapshot/            loads describe-*.json + errors.json into SDK types
 internal/exposure/            verdict: combines gate results into findings and remediation
 internal/exposure/gates/      one file per AWS control; each returns OPEN / BLOCKED / UNKNOWN + evidence
 fixtures/                     demo and missing-permission snapshots (see fixtures/README.md)
+lab/                          CloudFormation lab recreating the cases in a real account + live snapshot script
 ```
 
 ### Test scenarios
@@ -244,11 +245,42 @@ inventory source.
 
 ## What I would do next
 
-1. Live collector (`-aws-profile`, `-region`) producing the same snapshot, with a Terraform lab to reproduce the demo cases in a real account.
+1. A Go live collector (`-aws-profile`, `-region`) producing the same snapshot. Today [`lab/snapshot.sh`](lab/snapshot.sh) does this with the AWS CLI, and [`lab/`](lab/README.md) reproduces the demo cases in a real account.
 2. Internet-facing ALB/NLB path and IPv6.
 3. Check B on top of A: reachable instance × instance profile permissions gives a prioritised severity.
 4. Group findings by root-cause security group.
 
 ## Bonus: Aikido scan
 
-_TODO: connect a sandbox AWS account to Aikido, scan it, and compare Aikido's findings with this scanner's verdicts for the same resources._
+**Goal.** Run Aikido and this scanner against the same real resources and compare their verdicts.
+
+**What I did.**
+1. Created a new personal AWS account (Free plan) as a sandbox, separate from any work account.
+2. Deployed the [live lab](lab/README.md) with CloudFormation in `eu-north-1`. It has four instances
+   that share one SSH-open security group: one really exposed, three blocked by a different control
+   each (main route table without an IGW route, NACL deny, NACL without a reply path), plus an open
+   security group attached to nothing.
+3. Created an Aikido account and connected the AWS account with Aikido's read-only CloudFormation role. I tried twice.
+
+**Result: Aikido could not connect.** Both attempts ended with *"Unable to connect to cloud"*, and no
+scan ran, so there are no Aikido findings to compare yet.
+
+**Likely causes**, all on the AWS account side:
+- **The account was still being verified.** AWS says this can take up to two days for new accounts.
+  During that time CloudShell would not start either.
+- **The Free plan is restricted.** It is a simplified account, limited to one region and with "advanced
+  features" disabled. The console also manages IAM roles through its own Role Manager. Any of these
+  could stop an external account from assuming the role Aikido created.
+- **Setup friction.** The account was limited to 8 vCPUs, so the lab was reduced from five instances
+  to four, and CloudFormation's automatic role only worked on the second submit.
+
+**What this shows, in terms of this case.** It is the "missing permissions" scenario from section 4,
+seen from the product side. Aikido handled it the right way: it said explicitly that it could not
+connect, rather than reporting the account as clean. One thing I would change: the same page still
+shows a green **"0 issues"** badge next to that warning. At a glance that reads as "secure", when it
+really means "not scanned". This scanner reports that state as `UNKNOWN`, never as zero findings.
+
+**Next.** Once the account is verified (or upgraded to the Paid plan):
+1. Reconnect Aikido and let it scan.
+2. Capture a live snapshot with [`lab/snapshot.sh`](lab/snapshot.sh) and run this scanner on it.
+3. Compare, for each lab instance, Aikido's result with this scanner's verdict.
