@@ -29,7 +29,9 @@ aws cloudformation deploy --template-file exposure-lab.yaml --stack-name exposur
 aws cloudformation describe-stacks --stack-name exposure-lab --query 'Stacks[0].Outputs' --output table
 ```
 
-If `t3.micro` is not available in the region, add `--parameter-overrides InstanceType=t2.micro`.
+New accounts often have an 8-vCPU limit for standard instances, and five `t3.micro` (2 vCPUs each)
+exceed it. Use `--parameter-overrides InstanceType=t2.micro` (1 vCPU) in a region that offers t2,
+such as `eu-central-1` or `us-east-1` (`eu-north-1` does not).
 
 **3. Connect Aikido and let it scan.** In Aikido: **Connect cloud → AWS** and follow the wizard (it
 deploys a read-only role via CloudFormation). Wait until the cloud scan finishes.
